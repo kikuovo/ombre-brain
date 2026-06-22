@@ -227,7 +227,13 @@
     box-shadow: 6px 6px 14px var(--shadow-dark), -6px -6px 14px var(--shadow-light);
     transform: translateY(-1px);
   }
-  .bucket-row .icon { font-size: 16px; text-align: center; }
+  .bucket-row .icon {
+    font-size: 16px;
+    width: 28px; min-width: 28px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    overflow: visible;
+    line-height: 1;
+  }
   .bucket-row .name {
     font-weight: 500;
     white-space: nowrap;
@@ -1118,6 +1124,7 @@
   /* —— ⑤ feel 表情：hover 时轻轻点头 —— */
   @keyframes ob-bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-2.5px)} }
   .bucket-row:hover .feel-face { animation: ob-bob .7s ease-in-out; }
+  .bucket-row .icon svg, .bucket-row .icon svg.lucide { display: block; }
 
   /* —— ⑥ letter 桶详情：像翻开信纸一样展开 —— */
   @keyframes ob-unfold {
