@@ -195,6 +195,51 @@ def register(mcp) -> None:
             logger.warning(f"Breath hook failed: {e}")
             return PlainTextResponse("")
 
+    @mcp.custom_route("/recall-hook", methods=["GET"])
+    async def recall_hook(request):
+        """按一句话检索相关记忆，供外部服务（同 hook token 鉴权）做上下文注入。
+
+        /api/search 只认 Dashboard 登录 cookie，服务器对服务器调不了；本端点
+        与 /breath-hook 共用 _is_hook_request_authorized（token / 登录态 / 显式公开），
+        返回 JSON 数组 [{id, name, content_preview, score}]，出错一律回空数组不冒泡。
+        """
+        from starlette.responses import JSONResponse
+        if not _is_hook_request_authorized(request):
+            return JSONResponse([], status_code=401)
+        query = str((getattr(request, "query_params", {}) or {}).get("q", "") or "").strip()
+        if not query:
+            return JSONResponse([])
+        try:
+            limit_raw = (request.query_params or {}).get("limit", "5")
+            limit = max(1, min(10, int(limit_raw)))
+        except Exception:
+            limit = 5
+        try:
+            from ombrebrain.policy.surfacing import SurfacePolicyVM
+            policy = SurfacePolicyVM.default()
+            matches = await sh.bucket_mgr.search(query[:200], limit=limit * 2)
+            result = []
+            for b in matches:
+                if not policy.evaluate_bucket(b, mode="search").allowed:
+                    continue
+                meta = b.get("metadata", {}) or {}
+                # 钉选记忆已由 /breath-hook 注入，这里跳过避免重复
+                if meta.get("pinned") or meta.get("protected"):
+                    continue
+                result.append({
+                    "id": b["id"],
+                    "name": meta.get("name", b["id"]),
+                    "score": b.get("score", 0),
+                    "content_preview": strip_wikilinks(b.get("content", ""))[:200],
+                })
+                if len(result) >= limit:
+                    break
+            await sh.fire_webhook("recall_hook", {"query_chars": len(query), "hits": len(result)})
+            return JSONResponse(result)
+        except Exception as e:
+            logger.warning(f"Recall hook failed: {e}")
+            return JSONResponse([])
+
     # 注意：这里**故意不再提供 /dream-hook**。
     # 按 OB 的设计哲学，dream（做梦消化）不是义务、不该在每次会话开始被自动触发——
     # 它只应在「需要消化时」由模型主动调用 MCP 的 dream 工具。把它做成 SessionStart hook
