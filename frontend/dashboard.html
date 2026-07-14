@@ -1848,10 +1848,20 @@
     background: none; border: none; padding: 2px 4px; font-family: inherit;
   }
   .tl-expand:hover { text-decoration: underline; }
-  .tl-dtitles { font-size: 13px; line-height: 1.9; color: var(--text); margin-top: 2px; overflow-wrap: anywhere; }
-  .tl-dtitles .tl-t { cursor: pointer; }
-  .tl-dtitles .tl-t:hover { color: var(--accent); }
-  .tl-dtitles .tl-t + .tl-t::before { content: ' · '; color: var(--border-strong); pointer-events: none; }
+  /* 条目行：不点开就能看全貌（folio 式） */
+  .tl-period { font-size: 10px; letter-spacing: 2px; color: var(--text-light); margin: 10px 0 3px; display: flex; align-items: center; gap: 6px; }
+  .tl-period::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); opacity: .6; }
+  .tl-row { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; cursor: pointer; font-size: 13px; min-width: 0; }
+  .tl-row:hover .tl-rtitle { text-decoration: underline; }
+  .tl-rdot { width: 8px; height: 8px; border-radius: 50%; background: var(--border-strong); flex: none; align-self: center; }
+  .tl-row.lit .tl-rdot { background: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
+  .tl-rtime { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--text-light); flex: none; }
+  .tl-rtitle { font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 12em; flex: none; }
+  .tl-row.lit .tl-rtitle { color: var(--accent); }
+  .tl-rsum { color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+  .tl-hid { display: none; }
+  .tl-morebtn { font-size: 12px; color: var(--text-dim); background: none; border: none; cursor: pointer; padding: 4px 0 0 16px; font-family: inherit; }
+  .tl-morebtn:hover { color: var(--accent); }
   /* 当日展开区 */
   .tl-daybody { display: none; margin-top: 12px; }
   .tl-day.open .tl-daybody { display: block; }
@@ -4243,9 +4253,31 @@ async function renderTimeline() {
       const imp = items.filter(b => (b.importance || 0) >= TL_IMP).length;
       const pin = items.filter(b => b.pinned).length;
       const feel = items.filter(b => b.type === 'feel').length;
-      const titles = items.slice(0, 3).map(b =>
-        '<span class="tl-t" onclick="event.stopPropagation(); showDetail(this.dataset.id)" data-id="' + escAttr(b.id) + '">' + esc(b.name || b.id) + '</span>'
-      ).join('') + (items.length > 3 ? '<span style="color:var(--text-light);"> …</span>' : '');
+      // 条目行：时间倒序全量铺开，按 晨/午/晚/夜 分段，超过 9 条折叠
+      const rowsItems = items.slice().reverse();
+      const P = h => h < 5 ? ['夜', 'NIGHT'] : h < 12 ? ['晨', 'MORNING'] : h < 18 ? ['午', 'AFTERNOON'] : ['晚', 'EVENING'];
+      const MAXR = 9;
+      let rows = '', lastP = '', shown = 0;
+      rowsItems.forEach(b => {
+        const t = tlDate(b);
+        const pz = P(t.getHours());
+        const hid = shown >= MAXR ? ' tl-hid' : '';
+        if (pz[0] !== lastP) {
+          const pc = rowsItems.filter(x => P(tlDate(x).getHours())[0] === pz[0]).length;
+          rows += '<div class="tl-period' + hid + '">' + pz[0] + ' · ' + pz[1] + ' · ' + pc + '</div>';
+          lastP = pz[0];
+        }
+        const lit = (b.importance || 0) >= TL_IMP || b.pinned;
+        rows += '<div class="tl-row' + (lit ? ' lit' : '') + hid + '" onclick="showDetail(this.dataset.id)" data-id="' + escAttr(b.id) + '">' +
+          '<span class="tl-rdot"></span><span class="tl-rtime">' + tlPad(t.getHours()) + ':' + tlPad(t.getMinutes()) + '</span>' +
+          '<span class="tl-rtitle">' + esc(b.name || b.id) + '</span>' +
+          (b.content_preview ? '<span class="tl-rsum">· ' + esc(b.content_preview.slice(0, 60)) + '</span>' : '') +
+          '</div>';
+        shown++;
+      });
+      if (rowsItems.length > MAXR) {
+        rows += '<button class="tl-morebtn" onclick="this.parentElement.querySelectorAll(\'.tl-hid\').forEach(function(e){e.classList.remove(\'tl-hid\')}); this.remove();">↓ 在此展开剩余 ' + (rowsItems.length - MAXR) + ' 条</button>';
+      }
       const cards = items.map(b => {
         const t = tlDate(b);
         const tags = (b.tags || []).slice(0, 6).map(x => '<span>' + esc(x) + '</span>').join('');
@@ -4268,7 +4300,7 @@ async function renderTimeline() {
         '<div class="tl-drow"><span class="tl-dlabel">' + parseInt(dk, 10) + '<small>' + TL_WEEK[d0.getDay()] + '</small></span>' +
         '<span class="tl-dcount">' + items.length + ' 条' + (imp ? ' · <b>✦ ' + imp + '</b>' : '') + '</span>' +
         '<button class="tl-expand" onclick="this.closest(\'.tl-day\').classList.toggle(\'open\'); this.textContent = this.closest(\'.tl-day\').classList.contains(\'open\') ? \'收起当日 ↑\' : \'展开当日 →\';">展开当日 →</button></div>' +
-        '<div class="tl-dtitles">' + titles + '</div>' +
+        '<div class="tl-rows">' + rows + '</div>' +
         '<div class="tl-daybody">' + stats + cards + '</div>' +
         '</div>';
     }).join('');
