@@ -1815,6 +1815,79 @@
     transition: opacity 0.3s;
   }
   .self-overlay.show { opacity: 1; pointer-events: auto; }
+
+  /* ===== 时间线 Timeline（暖纸手账风，folio 时间线移植） ===== */
+  .tl-hero {
+    padding: 0 0 14px; border-bottom: 1px solid var(--border); margin-bottom: 6px;
+  }
+  .tl-hero .tl-line1 { font-family: 'Cormorant Garamond', serif; font-size: 30px; font-style: italic; color: var(--text); }
+  .tl-hero .tl-line1 b { color: var(--accent); font-size: 38px; font-style: normal; }
+  .tl-hero .tl-line1 small { font-size: 18px; color: var(--text-dim); font-style: italic; }
+  .tl-hero .tl-line2 { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+  .tl-month { display: flex; align-items: baseline; gap: 10px; margin: 22px 0 4px; }
+  .tl-month .tl-mnum { font-family: 'Cormorant Garamond', serif; font-size: 44px; color: var(--border-strong); line-height: 1; }
+  .tl-month .tl-mname { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 20px; color: var(--text); }
+  .tl-month .tl-mstat { font-size: 11px; color: var(--text-dim); margin-left: auto; }
+  .tl-month .tl-mstat b { color: var(--accent); }
+  .tl-rail { border-left: 2px solid var(--border); margin-left: 21px; padding-left: 20px; }
+  .tl-day { position: relative; padding: 12px 0; }
+  .tl-day + .tl-day { border-top: 1px dashed var(--border); }
+  .tl-day::before {
+    content: ''; position: absolute; left: -27px; top: 22px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 0 3px var(--surface), 0 0 0 4px var(--border);
+  }
+  .tl-day.tl-quiet::before { background: var(--border-strong); }
+  .tl-drow { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .tl-dlabel { font-family: 'Cormorant Garamond', serif; font-size: 22px; color: var(--text); }
+  .tl-dlabel small { font-family: inherit; font-size: 11px; color: var(--text-dim); margin-left: 6px; }
+  .tl-dcount { font-size: 12px; color: var(--text-dim); }
+  .tl-dcount b { color: var(--accent); }
+  .tl-expand {
+    font-size: 12px; color: var(--accent); cursor: pointer; white-space: nowrap;
+    background: none; border: none; padding: 2px 4px; font-family: inherit;
+  }
+  .tl-expand:hover { text-decoration: underline; }
+  .tl-dtitles { font-size: 13px; line-height: 1.9; color: var(--text); margin-top: 2px; overflow-wrap: anywhere; }
+  .tl-dtitles .tl-t { cursor: pointer; }
+  .tl-dtitles .tl-t:hover { color: var(--accent); }
+  .tl-dtitles .tl-t + .tl-t::before { content: ' · '; color: var(--border-strong); pointer-events: none; }
+  /* 当日展开区 */
+  .tl-daybody { display: none; margin-top: 12px; }
+  .tl-day.open .tl-daybody { display: block; }
+  .tl-stats {
+    display: flex; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    margin-bottom: 14px; background: var(--surface-solid); border-radius: var(--radius-control);
+  }
+  .tl-stats div { flex: 1; text-align: center; padding: 10px 0 8px; font-size: 11px; color: var(--text-dim); }
+  .tl-stats div + div { border-left: 1px solid var(--border); }
+  .tl-stats b { display: block; font-family: 'Cormorant Garamond', serif; font-size: 24px; color: var(--text); }
+  .tl-stats .tl-lit b { color: var(--accent); }
+  .tl-card {
+    background: var(--surface); border-radius: var(--radius-control); padding: 14px; margin-bottom: 12px;
+    box-shadow: inset 1px 1px 0 var(--shadow-light), 1px 2px 5px var(--shadow-dark-subtle);
+    cursor: pointer;
+  }
+  .tl-card:hover { box-shadow: inset 1px 1px 0 var(--shadow-light), 1px 2px 8px var(--shadow-dark); }
+  .tl-chead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .tl-ctitle { font-size: 15px; font-weight: 700; color: var(--text); }
+  .tl-cimp { font-size: 11px; color: var(--accent); font-family: 'Share Tech Mono', monospace; white-space: nowrap; }
+  .tl-ctime { font-size: 11px; color: var(--text-light); font-family: 'Share Tech Mono', monospace; }
+  .tl-cbody {
+    font-size: 13px; line-height: 1.8; color: var(--text); margin-top: 8px;
+    border-left: 3px solid var(--accent); padding-left: 10px; overflow-wrap: anywhere;
+  }
+  .tl-ctags { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .tl-ctags span {
+    font-size: 11px; color: var(--text-dim); border: 1px solid var(--border);
+    border-radius: 999px; padding: 2px 9px; background: var(--surface-solid);
+  }
+  @media (max-width: 640px) {
+    .tl-rail { margin-left: 8px; padding-left: 14px; }
+    .tl-day::before { left: -21px; }
+    .tl-month .tl-mnum { font-size: 32px; }
+  }
+
 </style>
 </head>
 <body>
@@ -1876,6 +1949,7 @@
 
 <div class="tabs">
   <div class="tab active" data-tab="list"><span>记忆桶</span><span class="tab-en">Buckets</span></div>
+  <div class="tab" data-tab="timeline"><span>时间线</span><span class="tab-en">Timeline</span></div>
   <div class="tab" data-tab="breath"><span>Breath 模拟</span><span class="tab-en">Breath Trace</span></div>
   <div class="tab" data-tab="network"><span>记忆网络</span><span class="tab-en">Network</span></div>
   <div class="tab" data-tab="plan"><span>计划</span><span class="tab-en">Plans</span></div>
@@ -1927,6 +2001,11 @@
     </summary>
     <div id="forgotten-list" style="margin-top:10px;"></div>
   </details>
+</div>
+<!-- 时间线：按月分组 → 按日归拢 → 展开当日（folio 时间线移植，纯前端，数据源 /api/buckets） -->
+<div class="content" id="timeline-view" style="display:none">
+  <div class="tl-hero" id="tl-hero"></div>
+  <div id="tl-body"><div class="loading">加载中… / Loading…</div></div>
 </div>
 
 <div class="content" id="breath-view" style="display:none">
@@ -4098,6 +4177,107 @@ const BASE = location.origin;
 let allBuckets = [];
 let currentFilter = 'all';
 
+const TL_WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+const TL_MONTH_EN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const TL_IMP = 8;   // importance >= 8 记为「重要」
+
+function tlDate(b) {
+  const s = b.created || b.last_active || '';
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function tlPad(n) { return n < 10 ? '0' + n : '' + n; }
+
+async function renderTimeline() {
+  const body = document.getElementById('tl-body');
+  if (!allBuckets.length) {
+    try {
+      const res = await fetch(BASE + '/api/buckets');
+      const data = await res.json();
+      if (res.ok && Array.isArray(data)) allBuckets = data;
+    } catch (e) { /* 下面按空态渲染 */ }
+  }
+  const dated = allBuckets.filter(b => !b.dont_surface && tlDate(b));
+  if (!dated.length) {
+    document.getElementById('tl-hero').innerHTML = '';
+    body.innerHTML = '<div class="loading">还没有带日期的记忆 / No dated memories yet</div>';
+    return;
+  }
+  // —— 聚合：月 → 日 ——
+  const months = {};   // 'YYYY-MM' -> { days: {'DD': [b,...]}, count, imp, feel }
+  let earliest = null;
+  dated.forEach(b => {
+    const d = tlDate(b);
+    if (!earliest || d < earliest) earliest = d;
+    const mk = d.getFullYear() + '-' + tlPad(d.getMonth() + 1);
+    const dk = tlPad(d.getDate());
+    if (!months[mk]) months[mk] = { days: {}, count: 0, imp: 0, feel: 0 };
+    const m = months[mk];
+    if (!m.days[dk]) m.days[dk] = [];
+    m.days[dk].push(b);
+    m.count++;
+    if ((b.importance || 0) >= TL_IMP) m.imp++;
+    if (b.type === 'feel') m.feel++;
+  });
+  // —— 顶栏：第 N 天 · N 段记忆 ——
+  const now = new Date();
+  const dayN = Math.max(1, Math.floor((now - earliest) / 86400000) + 1);
+  const impTotal = dated.filter(b => (b.importance || 0) >= TL_IMP).length;
+  document.getElementById('tl-hero').innerHTML =
+    '<div class="tl-line1">第 <b>' + dayN + '</b> 天 <small>· ' + dated.length + ' 段记忆沉淀于此</small></div>' +
+    '<div class="tl-line2">' + now.getFullYear() + '-' + tlPad(now.getMonth() + 1) + '-' + tlPad(now.getDate()) +
+    ' · ' + TL_WEEK[now.getDay()] + ' · ' + impTotal + ' 条值得被反复想起 · 时间向下生长，最深处是一切开始的地方</div>';
+  // —— 月块（新→旧） ——
+  const html = Object.keys(months).sort().reverse().map(mk => {
+    const m = months[mk];
+    const [y, mo] = mk.split('-');
+    const head =
+      '<div class="tl-month"><span class="tl-mnum">' + mo + '</span>' +
+      '<span class="tl-mname">' + TL_MONTH_EN[parseInt(mo, 10) - 1] + ' ' + y + '</span>' +
+      '<span class="tl-mstat"><b>' + m.count + '</b> 条 · <b>' + m.imp + '</b> 重要' +
+      (m.feel ? ' · <b>' + m.feel + '</b> feel' : '') + '</span></div>';
+    const days = Object.keys(m.days).sort().reverse().map(dk => {
+      const items = m.days[dk].slice().sort((a, b) => (a.created || '').localeCompare(b.created || ''));
+      const d0 = tlDate(items[0]);
+      const imp = items.filter(b => (b.importance || 0) >= TL_IMP).length;
+      const pin = items.filter(b => b.pinned).length;
+      const feel = items.filter(b => b.type === 'feel').length;
+      const titles = items.slice(0, 3).map(b =>
+        '<span class="tl-t" onclick="event.stopPropagation(); showDetail(this.dataset.id)" data-id="' + escAttr(b.id) + '">' + esc(b.name || b.id) + '</span>'
+      ).join('') + (items.length > 3 ? '<span style="color:var(--text-light);"> …</span>' : '');
+      const cards = items.map(b => {
+        const t = tlDate(b);
+        const tags = (b.tags || []).slice(0, 6).map(x => '<span>' + esc(x) + '</span>').join('');
+        return '<div class="tl-card" onclick="showDetail(this.dataset.id)" data-id="' + escAttr(b.id) + '">' +
+          '<div class="tl-chead"><span class="tl-ctitle">' + (b.pinned ? '❖ ' : '') + esc(b.name || b.id) + '</span>' +
+          '<span class="tl-cimp">' + (b.score != null ? b.score.toFixed(2) + ' · ' : '') + 'IMPORTANCE ' + (b.importance || 5) + '</span></div>' +
+          '<div class="tl-ctime">' + tlPad(t.getHours()) + ':' + tlPad(t.getMinutes()) + '</div>' +
+          (b.content_preview ? '<div class="tl-cbody">' + esc(b.content_preview) + '</div>' : '') +
+          (tags ? '<div class="tl-ctags">' + tags + '</div>' : '') +
+          '</div>';
+      }).join('');
+      const stats =
+        '<div class="tl-stats">' +
+        '<div><b>' + items.length + '</b>条目</div>' +
+        '<div' + (pin ? ' class="tl-lit"' : '') + '><b>' + pin + '</b>❖ 钉选</div>' +
+        '<div' + (imp ? ' class="tl-lit"' : '') + '><b>' + imp + '</b>✦ 重要</div>' +
+        '<div' + (feel ? ' class="tl-lit"' : '') + '><b>' + feel + '</b>♡ feel</div>' +
+        '</div>';
+      return '<div class="tl-day' + (imp ? '' : ' tl-quiet') + '">' +
+        '<div class="tl-drow"><span class="tl-dlabel">' + parseInt(dk, 10) + '<small>' + TL_WEEK[d0.getDay()] + '</small></span>' +
+        '<span class="tl-dcount">' + items.length + ' 条' + (imp ? ' · <b>✦ ' + imp + '</b>' : '') + '</span>' +
+        '<button class="tl-expand" onclick="this.closest(\'.tl-day\').classList.toggle(\'open\'); this.textContent = this.closest(\'.tl-day\').classList.contains(\'open\') ? \'收起当日 ↑\' : \'展开当日 →\';">展开当日 →</button></div>' +
+        '<div class="tl-dtitles">' + titles + '</div>' +
+        '<div class="tl-daybody">' + stats + cards + '</div>' +
+        '</div>';
+    }).join('');
+    return head + '<div class="tl-rail">' + days + '</div>';
+  }).join('');
+  body.innerHTML = html;
+}
+
+
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -4114,8 +4294,10 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.getElementById('letters-view').style.display = target === 'letters' ? '' : 'none';
     document.getElementById('anchors-view').style.display = target === 'anchors' ? '' : 'none';
     document.getElementById('about-view').style.display = target === 'about' ? '' : 'none';
+    document.getElementById('timeline-view').style.display = target === 'timeline' ? '' : 'none';
     if (target !== 'network' && _netRAF) { cancelAnimationFrame(_netRAF); _netRAF = null; }
     if (target === 'network') loadNetwork();
+    if (target === 'timeline') renderTimeline();
     if (target === 'plan') loadPlans();
     if (target === 'import') { pollImportStatus(); loadImportResults(); }
     if (target === 'logs') { loadLogs(); loadOBErrors(); }
