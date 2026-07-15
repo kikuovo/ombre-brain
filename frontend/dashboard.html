@@ -2564,6 +2564,34 @@
     <div class="config-section" id="sec-engine" data-sgroup="advanced">
       <h3>引擎 <span class="sec-en">Engine</span></h3>
 
+      <!-- ── API Profiles + Prompt 配置（folio 配置页移植，2026-07-15）── -->
+      <div style="margin-bottom:18px;" id="ob-profiles-panel">
+        <div style="font-weight:600;font-size:13px;margin-bottom:6px;">API Profiles <span class="en">多套模型配置</span></div>
+        <div style="font-size:11px;color:var(--text-light);margin-bottom:8px;">存几套常用配置，点圆点切换激活；保存直接写配置文件，重启不丢。</div>
+        <div id="ob-current-box" style="margin-bottom:8px;"></div>
+        <div id="ob-profiles-box"></div>
+        <div id="ob-pf-form" style="display:none;background:var(--surface);border-radius:10px;padding:12px;margin:8px 0;">
+          <div style="font-size:12px;font-weight:600;margin-bottom:8px;" id="ob-pf-form-title">新建 Profile</div>
+          <div class="config-row"><label>名称</label><input id="ob-pf-name" type="text" placeholder="比如 DeepSeek / 硅基流动" style="flex:1;"></div>
+          <div class="config-row"><label>模型名</label><input id="ob-pf-model" type="text" placeholder="deepseek-chat" style="flex:1;"></div>
+          <div class="config-row"><label>Base URL</label><input id="ob-pf-url" type="text" placeholder="https://api.deepseek.com/v1" style="flex:1;"></div>
+          <div class="config-row"><label>API Key</label><input id="ob-pf-key" type="password" placeholder="编辑时留空 = 不改" style="flex:1;"></div>
+          <div style="display:flex;gap:8px;margin-top:6px;align-items:center;">
+            <button onclick="obProfileSave()" class="btn-primary" style="padding:0 14px;height:32px;font-size:12px;">✓ 保存</button>
+            <button onclick="obProfileFormHide()" style="font-size:12px;padding:0 12px;height:32px;">取消</button>
+            <span id="ob-pf-form-msg" style="font-size:11px;"></span>
+          </div>
+        </div>
+        <div style="margin-top:6px;"><button onclick="obProfileNew()" style="font-size:12px;padding:4px 14px;">＋ 新建 Profile</button>
+          <span id="ob-pf-msg" style="font-size:11px;margin-left:8px;"></span></div>
+      </div>
+
+      <div style="margin-bottom:18px;" id="ob-prompts-panel">
+        <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Prompt 配置 <span class="en">Prompts</span></div>
+        <div style="font-size:11px;color:var(--text-light);margin-bottom:8px;">脱水 / 合并 / 导入提取的提示词页面直改，保存立即生效；「恢复默认」随时回出厂。模型开始委婉化时来这里加一句规矩。</div>
+        <div id="ob-prompts-box"></div>
+      </div>
+
       <div style="margin-bottom:18px;">
         <div style="font-weight:600;font-size:13px;margin-bottom:6px;">脱水 / 打标 LLM <span class="en">Compression LLM</span></div>
         <div class="config-row" style="align-items:center;">
@@ -6599,7 +6627,177 @@ async function loadConfig() {
   }
 }
 
+// ── API Profiles + Prompt 配置（folio 配置页移植，2026-07-15）─────────
+let _obProfiles = null;   // /api/profiles 缓存
+let _obEditIdx = -1;      // -1 = 新建
+let _obPrompts = [];
+let _obOpenPrompt = '';
+
+async function obLoadProfiles() {
+  const box = document.getElementById('ob-profiles-box');
+  if (!box) return;
+  try {
+    const r = await authFetch(BASE + '/api/profiles');
+    if (!r) return;
+    _obProfiles = await readJsonSafe(r);
+    obRenderProfiles();
+  } catch (e) { box.innerHTML = '<span style="font-size:11px;color:var(--negative)">加载失败: ' + esc(e.message) + '</span>'; }
+}
+
+function obRenderProfiles() {
+  const d = _obProfiles || {};
+  const cur = document.getElementById('ob-current-box');
+  if (cur && d.current) {
+    cur.innerHTML = '<div style="background:var(--surface);border-radius:10px;padding:10px 12px;font-size:11.5px;">' +
+      '<div style="font-size:10px;color:var(--text-light);letter-spacing:.06em;margin-bottom:3px;">当前生效（脱水 / 导入提取正在用）</div>' +
+      '<div><b>' + esc(d.current.model || '未配置') + '</b> · ' + esc(d.current.base_url || '—') + ' · ' +
+      (d.current.key_set ? esc(d.current.api_key_masked) : '<span style="color:var(--negative)">Key 未配置</span>') + '</div></div>';
+  }
+  const box = document.getElementById('ob-profiles-box');
+  if (!box) return;
+  const list = d.profiles || [];
+  if (!list.length) { box.innerHTML = '<div style="font-size:11px;color:var(--text-dim);">还没有 Profile，点下面「新建」把现在这套存进来吧</div>'; return; }
+  box.innerHTML = list.map(function (p, i) {
+    const on = d.active === i;
+    return '<div style="background:var(--surface);border-radius:10px;padding:10px 12px;margin:6px 0;display:flex;gap:10px;align-items:flex-start;">' +
+      '<span onclick="obProfileActivate(' + i + ')" title="点击激活" style="margin-top:4px;width:14px;height:14px;border-radius:50%;cursor:pointer;flex-shrink:0;box-shadow:inset 2px 2px 4px var(--shadow-dark-subtle);' + (on ? 'background:var(--accent);' : '') + '"></span>' +
+      '<div style="flex:1;min-width:0;">' +
+      '<b style="font-size:12.5px;">' + esc(p.name) + '</b>' + (on ? ' <span style="font-size:9px;border-radius:6px;padding:1px 7px;background:var(--accent-glow);color:var(--accent);">激活中</span>' : '') +
+      '<div style="font-size:10px;color:var(--text-light);word-break:break-all;">' + esc(p.model) + ' · ' + esc(p.base_url) + ' · ' + esc(p.api_key_masked || '无key') + '</div>' +
+      '<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">' +
+      '<button onclick="obProfileTest(' + i + ',this)" style="font-size:10.5px;padding:3px 10px;">◇ 测试</button>' +
+      '<button onclick="obProfileEdit(' + i + ')" style="font-size:10.5px;padding:3px 10px;">✎ 编辑</button>' +
+      '<button onclick="obProfileDelete(' + i + ')" style="font-size:10.5px;padding:3px 10px;color:var(--negative);">删除</button>' +
+      '<span style="font-size:10px;align-self:center;" id="ob-pf-test-' + i + '"></span>' +
+      '</div></div></div>';
+  }).join('');
+}
+
+async function obProfileActivate(i) {
+  const r = await authFetch(BASE + '/api/profiles/activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ index: i }) });
+  if (!r) return;
+  const d = await readJsonSafe(r);
+  const msg = document.getElementById('ob-pf-msg');
+  if (msg) msg.innerHTML = d && d.ok ? '<span style="color:var(--positive)">✓ 已切换</span>' : '<span style="color:var(--negative)">' + esc((d && d.error) || '失败') + '</span>';
+  obLoadProfiles();
+}
+
+async function obProfileDelete(i) {
+  if (!confirm('删除这套 Profile？（不影响正在生效的配置）')) return;
+  await authFetch(BASE + '/api/profiles/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ index: i }) });
+  obLoadProfiles();
+}
+
+async function obProfileTest(i, btn) {
+  const out = document.getElementById('ob-pf-test-' + i);
+  if (out) out.textContent = '测试中…';
+  try {
+    const r = await authFetch(BASE + '/api/profiles/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ index: i }) });
+    if (!r) return;
+    const d = await readJsonSafe(r);
+    if (out) out.innerHTML = d && d.ok ? '<span style="color:var(--positive)">✓ 可用（' + Number(d.model_count || 0) + ' 个模型）</span>' : '<span style="color:var(--negative)">✗ ' + esc((d && d.error) || '失败') + '</span>';
+  } catch (e) { if (out) out.innerHTML = '<span style="color:var(--negative)">✗ ' + esc(e.message) + '</span>'; }
+}
+
+function obProfileNew() { _obEditIdx = -1; obProfileFormShow('新建 Profile', { name: '', model: '', base_url: '', api_key: '' }); }
+
+function obProfileEdit(i) {
+  const p = ((_obProfiles || {}).profiles || [])[i];
+  if (!p) return;
+  _obEditIdx = i;
+  obProfileFormShow('编辑：' + p.name, { name: p.name, model: p.model, base_url: p.base_url, api_key: '' });
+}
+
+function obProfileFormShow(title, v) {
+  document.getElementById('ob-pf-form').style.display = '';
+  document.getElementById('ob-pf-form-title').textContent = title;
+  document.getElementById('ob-pf-name').value = v.name;
+  document.getElementById('ob-pf-model').value = v.model;
+  document.getElementById('ob-pf-url').value = v.base_url;
+  document.getElementById('ob-pf-key').value = '';
+  document.getElementById('ob-pf-form-msg').textContent = '';
+}
+
+function obProfileFormHide() { document.getElementById('ob-pf-form').style.display = 'none'; }
+
+async function obProfileSave() {
+  const msg = document.getElementById('ob-pf-form-msg');
+  msg.textContent = '保存中…';
+  const body = {
+    index: _obEditIdx,
+    name: document.getElementById('ob-pf-name').value,
+    model: document.getElementById('ob-pf-model').value,
+    base_url: document.getElementById('ob-pf-url').value,
+    api_key: document.getElementById('ob-pf-key').value,
+  };
+  try {
+    const r = await authFetch(BASE + '/api/profiles/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r) { msg.innerHTML = '<span style="color:var(--negative)">登录状态失效，刷新页面重新登录后再保存</span>'; return; }
+    const d = await readJsonSafe(r);
+    if (d && d.ok) { msg.innerHTML = '<span style="color:var(--positive)">✓ 已保存</span>'; obProfileFormHide(); obLoadProfiles(); }
+    else msg.innerHTML = '<span style="color:var(--negative)">' + esc((d && d.error) || '失败') + '</span>';
+  } catch (e) { msg.innerHTML = '<span style="color:var(--negative)">' + esc(e.message) + '</span>'; }
+}
+
+// ---------------- Prompt 配置 ----------------
+
+async function obLoadPrompts() {
+  const box = document.getElementById('ob-prompts-box');
+  if (!box) return;
+  try {
+    const r = await authFetch(BASE + '/api/prompts');
+    if (!r) return;
+    const d = await readJsonSafe(r);
+    _obPrompts = (d && d.prompts) || [];
+    obRenderPrompts();
+  } catch (e) { box.innerHTML = '<span style="font-size:11px;color:var(--negative)">加载失败: ' + esc(e.message) + '</span>'; }
+}
+
+function obTogglePrompt(k) { _obOpenPrompt = (_obOpenPrompt === k ? '' : k); obRenderPrompts(); }
+
+function obRenderPrompts() {
+  const box = document.getElementById('ob-prompts-box');
+  if (!box) return;
+  box.innerHTML = _obPrompts.map(function (p) {
+    const open = _obOpenPrompt === p.key;
+    const head = '<div onclick="obTogglePrompt(\'' + p.key + '\')" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">' +
+      '<b style="font-size:12.5px;">' + esc(p.label) + ' <span style="font-size:9px;color:var(--text-light);">' + esc(p.key) + '</span></b>' +
+      '<span style="font-size:10px;color:var(--text-light);">' + p.value.length + ' 字 · ' + (p.custom ? '<span style="color:var(--accent)">已自定义</span>' : '默认') + (open ? ' ⌄' : ' ›') + '</span></div>';
+    if (!open) return '<div style="background:var(--surface);border-radius:10px;padding:10px 12px;margin:6px 0;">' + head + '</div>';
+    return '<div style="background:var(--surface);border-radius:10px;padding:10px 12px;margin:6px 0;">' + head +
+      '<textarea id="ob-prompt-ta-' + p.key + '" style="width:100%;box-sizing:border-box;margin-top:8px;font-size:11px;line-height:1.7;padding:9px 11px;border-radius:8px;border:1px solid var(--border);background:var(--surface-solid);color:var(--text);font-family:inherit;resize:vertical;min-height:160px;">' + esc(p.value) + '</textarea>' +
+      '<div style="display:flex;gap:8px;margin-top:8px;align-items:center;">' +
+      '<button onclick="obSavePrompt(\'' + p.key + '\')" class="btn-primary" style="padding:0 14px;height:30px;font-size:12px;">✓ 保存</button>' +
+      '<button onclick="obResetPrompt(\'' + p.key + '\')" style="font-size:11px;padding:0 12px;height:30px;">↺ 恢复默认</button>' +
+      '<span id="ob-prompt-msg-' + p.key + '" style="font-size:11px;"></span></div>' +
+      '<div style="font-size:9.5px;color:var(--text-light);margin-top:6px;">保存立即生效（不用重启）；改坏了点「恢复默认」回出厂。</div></div>';
+  }).join('');
+}
+
+async function _obPromptPost(key, value, msgEl) {
+  if (msgEl) msgEl.textContent = '保存中…';
+  try {
+    const r = await authFetch(BASE + '/api/prompts/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: key, value: value }) });
+    if (!r) { if (msgEl) msgEl.innerHTML = '<span style="color:var(--negative)">登录状态失效，刷新页面重新登录后再保存</span>'; return; }
+    const d = await readJsonSafe(r);
+    if (msgEl) msgEl.innerHTML = d && d.ok ? '<span style="color:var(--positive)">✓ 已保存' + (d.custom ? '' : '（=默认）') + '</span>' : '<span style="color:var(--negative)">' + esc((d && d.error) || '失败') + '</span>';
+    await obLoadPrompts();
+    _obOpenPrompt = key; obRenderPrompts();
+  } catch (e) { if (msgEl) msgEl.innerHTML = '<span style="color:var(--negative)">' + esc(e.message) + '</span>'; }
+}
+
+async function obSavePrompt(key) {
+  const ta = document.getElementById('ob-prompt-ta-' + key);
+  await _obPromptPost(key, ta ? ta.value : '', document.getElementById('ob-prompt-msg-' + key));
+}
+
+async function obResetPrompt(key) {
+  if (!confirm('恢复出厂提示词？你的自定义会被清掉。')) return;
+  await _obPromptPost(key, '', document.getElementById('ob-prompt-msg-' + key));
+}
+
 async function refreshEnvConfig() {
+  try { obLoadProfiles(); obLoadPrompts(); } catch (e) {}
   try {
     var r = await authFetch('/api/env-config');
     if (!r) return;
