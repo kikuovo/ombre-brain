@@ -2086,6 +2086,13 @@
         <input type="checkbox" id="import-preserve-raw" style="display:none"
           onchange="syncSwFromCb('import-preserve-raw','import-preserve-raw-sw','')">
       </div>
+      <div class="hw-toggle-row" style="gap:10px;align-items:center;margin-top:8px;">
+        <span class="hw-switch" id="import-small-mode-sw" role="switch" aria-checked="false"
+          onclick="syncHwSwitch(this,'import-small-mode')"></span>
+        <span style="font-size:13px;color:var(--text);cursor:pointer;" onclick="document.getElementById('import-small-mode-sw').click()">小分量(补漏) <span class="en">Small Batch</span><span style="font-size:11px;color:var(--text-light);">（亲手挑的片段必出至少 1 条，不再宁缺勿滥）</span></span>
+        <input type="checkbox" id="import-small-mode" style="display:none"
+          onchange="syncSwFromCb('import-small-mode','import-small-mode-sw','')">
+      </div>
     </div>
 
     <div id="import-preflight-panel" style="display:none;margin:14px 0;padding:12px 14px;background:var(--surface-solid);border-radius:8px;font-size:12px;line-height:1.7;box-shadow:inset 2px 2px 5px var(--shadow-dark-subtle),inset -2px -2px 4px var(--shadow-light);">
@@ -7404,10 +7411,11 @@ async function confirmStartImport() {
 
 async function startImport(file) {
   const preserveRaw = document.getElementById('import-preserve-raw').checked;
+  const smallMode = document.getElementById('import-small-mode') && document.getElementById('import-small-mode').checked;
   const fd = new FormData();
   fd.append('file', file);
   try {
-    const res = await fetch(BASE + '/api/import/upload?preserve_raw=' + (preserveRaw ? '1' : '0'), { method: 'POST', body: fd });
+    const res = await fetch(BASE + '/api/import/upload?preserve_raw=' + (preserveRaw ? '1' : '0') + (smallMode ? '&mode=small' : ''), { method: 'POST', body: fd });
     const data = await res.json();
     if (data.error) { alert('导入失败: ' + data.error); return; }
     clearImportPreflight();
