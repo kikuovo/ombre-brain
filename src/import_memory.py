@@ -772,7 +772,8 @@ class ImportEngine:
 
         # 用 human 配置替换 prompt 里的「用户」称呼，让 LLM 输出更个人化。
         _human = self.config.get("human", "用户")
-        prompt = IMPORT_EXTRACT_PROMPT.replace("用户", _human) if _human != "用户" else IMPORT_EXTRACT_PROMPT
+        _base_prompt = (self.config.get("prompts", {}) or {}).get("import_extract") or IMPORT_EXTRACT_PROMPT
+        prompt = _base_prompt.replace("用户", _human) if _human != "用户" else _base_prompt
         if getattr(self, "_mode", "large") == "small":
             prompt += _SMALL_MODE_SUFFIX
 

@@ -30,6 +30,7 @@ from . import github
 from . import embedding
 from . import ollama_local
 from . import config_api
+from . import profiles_api
 from . import v3_debug
 
 
@@ -50,6 +51,7 @@ _WEB_MODULES = (
     ("web.embedding", embedding.register),
     ("web.ollama_local", ollama_local.register),
     ("web.config_api", config_api.register),
+    ("web.profiles_api", profiles_api.register),
     ("web.v3_debug", v3_debug.register),
 )
 

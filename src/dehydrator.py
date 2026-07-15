@@ -265,6 +265,8 @@ class Dehydrator:
     def __init__(self, config: dict):
         # --- Read dehydration API config / 读取脱水 API 配置 ---
         dehy_cfg = config.get("dehydration", {})
+        # prompt 覆盖等运行时读取（web/profiles_api 的 Prompt 配置页）
+        self.config = config
         self.api_key = dehy_cfg.get("api_key", "")
         self.model = dehy_cfg.get("model", _DEFAULT_MODEL)
         self.base_url = dehy_cfg.get("base_url", _DEFAULT_BASE_URL)
@@ -708,7 +710,7 @@ class Dehydrator:
         调用 LLM API 执行智能脱水。
         """
         return await self._chat(
-            DEHYDRATE_PROMPT + _perspective_rule(self.human),
+            ((self.config.get("prompts", {}) or {}).get("dehydrate") or DEHYDRATE_PROMPT) + _perspective_rule(self.human),
             content[:_DEHYDRATE_INPUT_LIMIT],
         )
 
@@ -725,7 +727,7 @@ class Dehydrator:
             f"旧记忆：\n{old_content[:_MERGE_INPUT_LIMIT]}\n\n"
             f"新内容：\n{new_content[:_MERGE_INPUT_LIMIT]}"
         )
-        return await self._chat(MERGE_PROMPT + _perspective_rule(self.human), user_msg)
+        return await self._chat(((self.config.get("prompts", {}) or {}).get("merge") or MERGE_PROMPT) + _perspective_rule(self.human), user_msg)
 
     # ---------------------------------------------------------
     # Output formatting
