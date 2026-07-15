@@ -2136,8 +2136,13 @@
       <div id="import-wb-filters" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;"></div>
       <style>
         /* 审阅工作台三栏（2026-07-15）：桌面三栏，窄屏自动叠竖排 */
-        #ob-wb-cols{display:grid;grid-template-columns:250px 1fr 230px;gap:12px;align-items:start;}
-        @media(max-width:900px){#ob-wb-cols{grid-template-columns:1fr;}}
+        /* 工作台从导入页 720px 容器里破格拉宽：宽屏时占到视口宽（上限 1380px）并居中 */
+        #import-results-section{width:min(1380px,calc(100vw - 80px));position:relative;left:50%;transform:translateX(-50%);}
+        #ob-wb-cols{display:grid;grid-template-columns:270px minmax(0,1fr) 300px;gap:14px;align-items:start;}
+        @media(max-width:900px){
+          #import-results-section{width:auto;position:static;transform:none;}
+          #ob-wb-cols{grid-template-columns:1fr;}
+        }
         .ob-wb-colh{font-size:10px;color:var(--text-light);letter-spacing:.08em;margin-bottom:6px;}
       </style>
       <div id="ob-wb-cols">
