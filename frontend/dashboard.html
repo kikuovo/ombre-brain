@@ -2124,8 +2124,10 @@
     <div id="import-errors" style="display:none;margin:12px 0;padding:12px;background:var(--surface);border-radius:8px;font-size:12px;color:var(--negative);max-height:120px;overflow-y:auto;"></div>
 
     <div id="import-results-section" style="margin:20px 0;">
-      <h3>已导入记忆 <span class="en">Imported</span> <button onclick="loadImportResults()" title="刷新 / Refresh" style="font-size:12px;padding:2px 8px;"><i data-lucide="refresh-cw"></i></button></h3>
-      <div id="import-results-list" style="max-height:500px;overflow-y:auto;"></div>
+      <h3>最近导入 · 审阅 <span class="en">Review</span> <button onclick="loadImportResults()" title="刷新 / Refresh" style="font-size:12px;padding:2px 8px;"><i data-lucide="refresh-cw"></i></button></h3>
+      <div id="import-wb-stats" style="font-size:11px;color:var(--text-light);margin:4px 0 8px;"></div>
+      <div id="import-wb-filters" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;"></div>
+      <div id="import-results-list" style="max-height:600px;overflow-y:auto;"></div>
     </div>
 
     <hr style="border-color:var(--border);margin:24px 0;" />
@@ -7464,33 +7466,166 @@ async function pauseImport() {
   try { await fetch(BASE + '/api/import/pause', { method: 'POST' }); } catch(e) { alert('暂停失败: ' + (e.message || e)); }
 }
 
+// ── 导入审阅工作台（folio 导入台移植，2026-07-15）─────────────────
+// 状态模型：待精修(默认) / 存疑 / 已精修 存 metadata.review_status；
+// 已标噪声 = resolved=true。列表点一条展开精修卡（全文从 /api/bucket/{id} 拉），
+// 可改标题/正文/标签/重要度，「完成精修」=保存修改+标记已精修。
+let _wbBuckets = [];
+let _wbFilter = 'pending';
+let _wbOpenId = null;
+let _wbFull = {};   // id -> 全文（编辑用，results 里的 content 截断到 300 字）
+
+const _WB_PILLS = {
+  pending: ['待精修', 'var(--accent)', 'var(--accent-glow)'],
+  doubt:   ['存疑',   'var(--warning)', 'rgba(184,151,98,.18)'],
+  refined: ['已精修', '#6d8f6d', 'rgba(135,169,135,.2)'],
+  noise:   ['已噪声', 'var(--negative)', 'rgba(190,90,65,.12)'],
+};
+
+function _wbStatusOf(b) {
+  if (b.resolved) return 'noise';
+  if (b.review_status === 'refined') return 'refined';
+  if (b.review_status === 'doubt') return 'doubt';
+  return 'pending';
+}
+
+function _wbPill(st) {
+  const p = _WB_PILLS[st] || _WB_PILLS.pending;
+  return '<span style="font-size:10px;border-radius:6px;padding:1px 8px;white-space:nowrap;color:' + p[1] + ';background:' + p[2] + ';">' + p[0] + '</span>';
+}
+
 async function loadImportResults() {
   const container = document.getElementById('import-results-list');
   container.innerHTML = '<div class="loading">加载中… / Loading…</div>';
   try {
-    const res = await fetch(BASE + '/api/import/results?limit=30');
-    const data = await res.json();
-    if (!data.buckets || !data.buckets.length) {
-      container.innerHTML = '<p style="color:var(--text-dim)">暂无记忆桶</p>';
-      return;
+    const res = await authFetch(BASE + '/api/import/results?limit=200');
+    if (!res) return;
+    const data = await readJsonSafe(res);
+    _wbBuckets = (data && data.buckets) || [];
+    renderWb();
+  } catch (e) { container.innerHTML = '<p style="color:var(--negative)">加载失败: ' + esc(e.message) + '</p>'; }
+}
+
+function _wbCounts() {
+  const c = { pending: 0, doubt: 0, refined: 0, noise: 0 };
+  _wbBuckets.forEach(function (b) { c[_wbStatusOf(b)]++; });
+  return c;
+}
+
+function wbSetFilter(f) { _wbFilter = f; _wbOpenId = null; renderWb(); }
+
+async function wbOpen(id) {
+  if (_wbOpenId === id) { _wbOpenId = null; renderWb(); return; }
+  _wbOpenId = id;
+  if (!(id in _wbFull)) {
+    try {
+      const res = await authFetch(BASE + '/api/bucket/' + encodeURIComponent(id));
+      if (res) { const d = await readJsonSafe(res); if (d && !d.error) _wbFull[id] = d.content || ''; }
+    } catch (e) { /* 拉不到全文就先用截断版 */ }
+  }
+  renderWb();
+}
+
+async function _wbReview(id, action) {
+  const res = await authFetch(BASE + '/api/import/review', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ decisions: [{ bucket_id: id, action: action }] })
+  });
+  if (!res) return false;
+  const d = await readJsonSafe(res);
+  return !!(d && !d.error);
+}
+
+async function wbSaveEdit(id) {
+  const name = (document.getElementById('wb-name') || { value: '' }).value.trim();
+  const content = (document.getElementById('wb-content') || { value: '' }).value;
+  const tags = (document.getElementById('wb-tags') || { value: '' }).value;
+  const imp = parseInt((document.getElementById('wb-imp') || { value: '5' }).value, 10) || 5;
+  const body = { tags: tags, importance: imp };
+  if (name) body.name = name;
+  if (content.trim()) body.content = content;
+  const res = await authFetch(BASE + '/api/bucket/' + encodeURIComponent(id) + '/edit', {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!res) return false;
+  const d = await readJsonSafe(res);
+  if (d && d.error) { alert('保存失败: ' + d.error); return false; }
+  _wbFull[id] = content;
+  return true;
+}
+
+async function wbFinish(id) {
+  if (!(await wbSaveEdit(id))) return;
+  await _wbReview(id, 'refined');
+  _wbOpenId = null;
+  await loadImportResults();
+}
+
+async function wbMark(id, action) {   // doubt / pending / noise / pin
+  if (action === 'doubt' || action === 'pending') { await _wbReview(id, action); }
+  else { await _wbReview(id, action); }
+  await loadImportResults();
+}
+
+async function wbDelete(id) {
+  if (!confirm('确定不入库？这条记忆会移入删除档案。')) return;
+  await _wbReview(id, 'delete');
+  _wbOpenId = null;
+  await loadImportResults();
+}
+
+function renderWb() {
+  const stats = document.getElementById('import-wb-stats');
+  const filters = document.getElementById('import-wb-filters');
+  const container = document.getElementById('import-results-list');
+  if (!container) return;
+  const c = _wbCounts();
+  const total = _wbBuckets.length;
+  const done = c.refined;
+  if (stats) stats.textContent = total ? ('已精修 ' + done + ' / ' + total + ' · ' + Math.round(done / total * 100) + '%　精修后状态同步保存，记忆格 / 时间线都会跟着更新') : '';
+  if (filters) {
+    const defs = [['pending', '待精修', c.pending], ['doubt', '存疑', c.doubt], ['refined', '已精修', c.refined], ['all', '全部', total]];
+    filters.innerHTML = defs.map(function (d) {
+      const on = _wbFilter === d[0];
+      return '<span onclick="wbSetFilter(\'' + d[0] + '\')" style="font-size:11px;padding:3px 12px;border-radius:9px;cursor:pointer;background:var(--surface-solid);' +
+        (on ? 'box-shadow:inset 2px 2px 5px var(--shadow-dark-subtle),inset -2px -2px 4px var(--shadow-light);color:var(--accent);' : 'box-shadow:2px 2px 5px var(--shadow-dark-subtle),-2px -2px 4px var(--shadow-light);color:var(--text-dim);') +
+        '">' + d[1] + ' ' + d[2] + '</span>';
+    }).join('');
+  }
+  const list = _wbBuckets.filter(function (b) { return _wbFilter === 'all' || _wbStatusOf(b) === _wbFilter; });
+  if (!list.length) { container.innerHTML = '<p style="color:var(--text-dim);font-size:12px;">这个状态下暂时没有记忆</p>'; return; }
+  container.innerHTML = list.map(function (b) {
+    const st = _wbStatusOf(b);
+    const head = '<div onclick="wbOpen(\'' + escAttr(b.id) + '\')" style="display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;">' +
+      '<b style="font-size:13px;">' + esc(b.name || b.id) + '</b>' +
+      '<span style="font-size:10px;color:var(--text-light);white-space:nowrap;">' + _wbPill(st) + ' 重要 ' + Number(b.importance || 5) + (_wbOpenId === b.id ? ' ⌄' : ' ›') + '</span></div>';
+    if (_wbOpenId !== b.id) {
+      return '<div style="background:var(--surface);border-radius:11px;padding:10px 13px;margin:7px 0;">' + head + '</div>';
     }
-    container.innerHTML = data.buckets.map(b => `
-      <div data-review-bucket-id="${escAttr(b.id)}" style="background:var(--surface);border-radius:12px;padding:14px;margin:8px 0;">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <b>${esc(b.name || b.id)}</b>
-          <span style="font-size:11px;color:var(--text-dim);">${esc(b.type)} | ${esc((b.domain||[]).join(','))} | imp:${Number(b.importance || 0)}</span>
-        </div>
-        <p style="font-size:13px;margin:6px 0;white-space:pre-wrap;">${esc(b.content)}</p>
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;">${esc((b.tags||[]).map(t=>'#'+t).join(' '))}</div>
-        <div style="display:flex;gap:8px;">
-          <button data-bucket-id="${escAttr(b.id)}" onclick="reviewAction(this.dataset.bucketId,'pin')" class="icon-btn" title="固定为永久记忆"><i data-lucide="pin"></i> 固定</button>
-          <button data-bucket-id="${escAttr(b.id)}" onclick="reviewAction(this.dataset.bucketId,'important')" class="icon-btn" title="标为重要"><i data-lucide="star"></i> 重要</button>
-          <button data-bucket-id="${escAttr(b.id)}" onclick="reviewAction(this.dataset.bucketId,'noise')" class="icon-btn" title="标为噪声并resolve"><i data-lucide="trash-2"></i> 噪声</button>
-          <button data-bucket-id="${escAttr(b.id)}" onclick="if(confirm('确定移入删除档案？ / Move to delete archive?'))reviewAction(this.dataset.bucketId,'delete')" class="icon-btn" title="删除到档案 / Move to archive" style="color:var(--negative);"><i data-lucide="x"></i> 删除到档案</button>
-        </div>
-      </div>
-    `).join('');
-  } catch(e) { container.innerHTML = '<p style="color:var(--negative)">加载失败: ' + esc(e.message) + '</p>'; }
+    const full = (b.id in _wbFull) ? _wbFull[b.id] : (b.content || '');
+    const lbl = 'font-size:10px;color:var(--text-light);margin:9px 0 3px;letter-spacing:.05em;';
+    const editor =
+      '<div style="' + lbl + '">标题</div>' +
+      '<input id="wb-name" type="text" value="' + escAttr(b.name || '') + '" style="width:100%;box-sizing:border-box;font-size:13px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface-solid);color:var(--text);font-family:inherit;">' +
+      '<div style="' + lbl + '">正文（可改）</div>' +
+      '<textarea id="wb-content" style="width:100%;box-sizing:border-box;font-size:12.5px;line-height:1.7;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface-solid);color:var(--text);font-family:inherit;resize:vertical;min-height:110px;">' + esc(full) + '</textarea>' +
+      '<div style="' + lbl + '">标签（逗号分隔）</div>' +
+      '<input id="wb-tags" type="text" value="' + escAttr((b.tags || []).join(', ')) + '" style="width:100%;box-sizing:border-box;font-size:12px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface-solid);color:var(--text);font-family:inherit;">' +
+      '<div style="' + lbl + '">重要度 <b id="wb-imp-val" style="color:var(--accent);">' + Number(b.importance || 5) + '</b> / 10</div>' +
+      '<input id="wb-imp" type="range" min="1" max="10" step="1" value="' + Number(b.importance || 5) + '" style="width:100%;" oninput="document.getElementById(\'wb-imp-val\').textContent=this.value">' +
+      '<div style="display:flex;gap:7px;margin-top:12px;flex-wrap:wrap;align-items:center;">' +
+      '<button onclick="wbFinish(\'' + escAttr(b.id) + '\')" style="font-size:12px;padding:7px 14px;border-radius:9px;background:var(--accent);color:#FFF9EC;border:none;font-family:inherit;cursor:pointer;font-weight:600;">✓ 完成精修</button>' +
+      (st === 'doubt'
+        ? '<button onclick="wbMark(\'' + escAttr(b.id) + '\',\'pending\')" class="icon-btn" style="font-size:11px;">↩ 取消存疑</button>'
+        : '<button onclick="wbMark(\'' + escAttr(b.id) + '\',\'doubt\')" class="icon-btn" style="font-size:11px;">⚑ 标记存疑</button>') +
+      '<button onclick="reviewAction(\'' + escAttr(b.id) + '\',\'pin\')" class="icon-btn" style="font-size:11px;" title="固定为永久记忆">✦ 钉选</button>' +
+      '<button onclick="wbMark(\'' + escAttr(b.id) + '\',\'noise\')" class="icon-btn" style="font-size:11px;" title="标为噪声并 resolve">▽ 噪声</button>' +
+      '<button onclick="wbDelete(\'' + escAttr(b.id) + '\')" class="icon-btn" style="font-size:11px;color:var(--negative);margin-left:auto;">✕ 不入库</button>' +
+      '</div>' +
+      '<div style="font-size:10px;color:var(--text-light);margin-top:7px;">「完成精修」= 保存上面的修改并归入已精修；收起（再点标题）不改状态</div>';
+    return '<div style="background:var(--surface);border-radius:11px;padding:12px 14px;margin:7px 0;box-shadow:inset 2px 2px 5px var(--shadow-dark-subtle),inset -2px -2px 4px var(--shadow-light);">' + head + '<div style="font-size:10px;color:var(--text-light);margin-top:3px;">' + esc(b.id) + ' · ' + esc((b.created || '').slice(0, 16)) + '</div>' + editor + '</div>';
+  }).join('');
 }
 
 async function detectPatterns() {
