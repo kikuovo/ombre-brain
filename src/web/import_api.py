@@ -346,6 +346,10 @@ def register(mcp) -> None:
                     "tags": b["metadata"].get("tags", []),
                     "importance": b["metadata"].get("importance", 5),
                     "created": b["metadata"].get("created", ""),
+                    # 审阅工作台字段（2026-07-15）：精修状态 + 噪声/钉选标记
+                    "review_status": b["metadata"].get("review_status", ""),
+                    "resolved": bool(b["metadata"].get("resolved", False)),
+                    "pinned": bool(b["metadata"].get("pinned", False)),
                 })
             return JSONResponse({"buckets": results, "total": len(all_buckets)})
         except Exception as e:
@@ -404,6 +408,11 @@ def register(mcp) -> None:
                     if ok is False:
                         errors += 1
                         continue
+                elif action in ("refined", "doubt", "pending"):
+                    # 审阅工作台的精修状态流转：pending = 清空回待精修
+                    await sh.bucket_mgr.update(
+                        bid, review_status=("" if action == "pending" else action)
+                    )
                 elif action == "noise":
                     await sh.bucket_mgr.update(bid, resolved=True, importance=1)
                 elif action == "delete":
