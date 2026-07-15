@@ -262,6 +262,7 @@ def register(mcp) -> None:
 
             preserve_raw = request.query_params.get("preserve_raw", "").lower() in ("1", "true")
             resume = request.query_params.get("resume", "").lower() in ("1", "true")
+            mode = "small" if request.query_params.get("mode", "").lower() == "small" else "large"
 
         except Exception as e:
             return JSONResponse({"error": f"Failed to read upload: {e}"}, status_code=400)
@@ -269,7 +270,7 @@ def register(mcp) -> None:
         # Start import in background
         async def _run_import():
             try:
-                await sh.import_engine.start(raw_content, filename, preserve_raw, resume)
+                await sh.import_engine.start(raw_content, filename, preserve_raw, resume, mode=mode)
             except Exception as e:
                 logger.error(f"Import failed: {e}")
 

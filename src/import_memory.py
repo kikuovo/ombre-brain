@@ -558,6 +558,18 @@ preserve_raw: true = 特殊情境/暗号/仪式，保留原文不摘要
 is_pattern: true = 反复出现的习惯性行为模式"""
 
 
+_SMALL_MODE_SUFFIX = """
+
+【本次模式 — 用户主动补漏（硬性要求）】
+- 这段内容是用户**亲手从聊天记录里挑出来交给你**的，她已经判断过值得记
+- **你的工作是帮她整理，不是再判断一次值不值得**
+- **必须输出至少 1 个条目**，即使内容看起来琐碎、温柔、片段化、只是一句话
+- 主提示词里"总条目数 0~5 个 / 可返回空数组"的规则**在此模式完全失效**
+- 哪怕只有一句「我懂你」的回应、一个温柔的比喻、一段片段化的对话，也整理为 1 条
+- **返回空数组 = 把用户的输入扔了，这是失败行为**
+- 极端情况（内容真的无法理解），也至少创建 1 个 name="(待补充) 用户挑选的片段"、importance=3 的占位条目"""
+
+
 # ============================================================
 # Import Engine — core processing logic
 # 导入引擎 — 核心处理逻辑
@@ -597,6 +609,7 @@ class ImportEngine:
         filename: str = "",
         preserve_raw: bool = False,
         resume: bool = False,
+        mode: str = "large",
     ) -> dict:
         """
         Start or resume an import.
@@ -610,6 +623,8 @@ class ImportEngine:
             return {"error": "LLM API 未配置或不可用，导入需要 OMBRE_COMPRESS_API_KEY。请检查 config.yaml 或环境变量。"}
 
         self._running = True
+        # 小分量(补漏)：用户亲手挑的片段，提取时必出至少 1 条（见 _SMALL_MODE_SUFFIX）
+        self._mode = "small" if mode == "small" else "large"
         self._paused = False
 
         try:
@@ -755,6 +770,8 @@ class ImportEngine:
         # 用 human 配置替换 prompt 里的「用户」称呼，让 LLM 输出更个人化。
         _human = self.config.get("human", "用户")
         prompt = IMPORT_EXTRACT_PROMPT.replace("用户", _human) if _human != "用户" else IMPORT_EXTRACT_PROMPT
+        if getattr(self, "_mode", "large") == "small":
+            prompt += _SMALL_MODE_SUFFIX
 
         raw = await self.dehydrator._chat(
             prompt,
