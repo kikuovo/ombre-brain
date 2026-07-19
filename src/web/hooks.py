@@ -234,6 +234,16 @@ def register(mcp) -> None:
                 })
                 if len(result) >= limit:
                     break
+            # 强化回写（记忆库教程 §9：越被想起，越不容易忘）——带 touch=1 时把命中桶
+            # 真实激活一次（last_active + activation_count，衰减引擎据此减缓遗忘）。
+            # 默认不强化：外部服务逐条消息的自动检索是背景召回，全强化会让噪音越滚越强
+            # （教程 §9 滥强化警告）；只有「他主动想起」（search_memory 那类）才传 touch=1。
+            touch_flag = str((request.query_params or {}).get("touch", "") or "") in ("1", "true")
+            if touch_flag and result:
+                try:
+                    await sh.bucket_mgr.touch_many([r["id"] for r in result], ripple=False)
+                except Exception as e:
+                    logger.warning(f"recall_hook touch failed: {e}")
             await sh.fire_webhook("recall_hook", {"query_chars": len(query), "hits": len(result)})
             return JSONResponse(result)
         except Exception as e:
