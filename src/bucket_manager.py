@@ -872,11 +872,12 @@ class BucketManager:
                     bucket_id = generate_bucket_id()
         else:
             bucket_id = generate_bucket_id()
-        # 桶名 = "YYYY-MM-DD HH-MM-SS [LLM生成的标题]"，无标题时仅用时间戳。
-        # 使用连字符替代冒号，避免 sanitize_name 后续编辑时把冒号去掉破坏可读性。
+        # 桶名 = 标题本身,不再拼时间戳前缀——created 元数据本就带时间,名字里再塞一遍
+        # 纯冗余,面板/App 里自查还得逐条手删(她的原话)。无标题时才用时间戳兜底占位。
+        # 时间戳用连字符替代冒号，避免 sanitize_name 后续编辑时把冒号去掉破坏可读性。
         _ts = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
         _clean = sanitize_name(name) if name else ""
-        bucket_name = (f"{_ts} {_clean}" if (_clean and _clean != "unnamed") else _ts)[:80]
+        bucket_name = (_clean if (_clean and _clean != "unnamed") else _ts)[:80]
         # feel buckets are allowed to have empty domain; others default to ["未分类"]
         if bucket_type == "feel":
             domain = domain if domain is not None else []
